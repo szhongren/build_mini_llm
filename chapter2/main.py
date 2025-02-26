@@ -47,3 +47,56 @@ print(text)
 tokenizer = SimpleTokenizerV2(vocab)
 print(tokenizer.encode(text))
 print(tokenizer.decode(tokenizer.encode(text)))
+
+# 2.5 bype pair encoding
+import tiktoken
+
+tokenizer = tiktoken.get_encoding("gpt2")
+text = (
+    "Hello, do you like tea? <|endoftext|> In the sunlit terraces of someunknownPlace."
+)
+
+integers = tokenizer.encode(text, allowed_special={"<|endoftext|>"})
+print(integers)
+strings = tokenizer.decode(integers)
+print(strings)
+
+# 2.6 data sampling with a sliding windowh
+from gpt_dataset import create_dataloader_v1
+
+with open("the-verdict.txt", "r", encoding="utf-8") as f:
+    raw_text = f.read()
+
+enc_text = tokenizer.encode(raw_text)
+print(len(enc_text))
+
+enc_sample = enc_text[50:]
+
+context_size = 4
+x = enc_sample[:context_size]
+y = enc_sample[1 : context_size + 1]
+print(f"X: {x}")
+print(f"y:      {y}")
+
+for i in range(1, context_size + 1):
+    context = enc_sample[:i]
+    desired = enc_sample[i]
+    # print(context, "----->", desired)
+    print(tokenizer.decode(context), "----->", tokenizer.decode([desired]))
+
+dataloader = create_dataloader_v1(
+    raw_text, batch_size=1, max_length=4, stride=1, shuffle=False
+)
+data_iter = iter(dataloader)
+first_batch = next(data_iter)
+print(first_batch)
+
+second_batch = next(data_iter)
+print(second_batch)
+
+dataloader2 = create_dataloader_v1(
+    raw_text, batch_size=8, max_length=4, stride=4, shuffle=False
+)
+data_iter2 = iter(dataloader2)
+first_batch2 = next(data_iter2)
+print(first_batch2)
