@@ -61,8 +61,9 @@ print(integers)
 strings = tokenizer.decode(integers)
 print(strings)
 
-# 2.6 data sampling with a sliding windowh
+# 2.6 data sampling with a sliding window
 from gpt_dataset import create_dataloader_v1
+import torch
 
 with open("the-verdict.txt", "r", encoding="utf-8") as f:
     raw_text = f.read()
@@ -95,8 +96,49 @@ second_batch = next(data_iter)
 print(second_batch)
 
 dataloader2 = create_dataloader_v1(
-    raw_text, batch_size=8, max_length=4, stride=4, shuffle=False
+    # batch_size -> number of sequences of tokens to be returned
+    # max_length -> number of tokens in a sequence
+    # stride -> number of tokens to skip between sequences
+    raw_text,
+    batch_size=8,
+    max_length=4,
+    stride=4,
+    shuffle=False,
 )
 data_iter2 = iter(dataloader2)
 first_batch2 = next(data_iter2)
 print(first_batch2)
+
+test_input_ids = torch.tensor([2, 3, 5, 1])
+vocab_size = 6
+output_dim = 3
+torch.manual_seed(123)
+embedding_layer = torch.nn.Embedding(vocab_size, output_dim)
+print(embedding_layer.weight)
+print(embedding_layer(torch.tensor([3])))
+print(embedding_layer(test_input_ids))
+
+# 2.8 encoding word positions
+vocab_size = 50257
+output_dim = 256  # this is the embedding dimension, number of dimensions for the embedding tensor of a token
+token_embedding_layer = torch.nn.Embedding(vocab_size, output_dim)
+
+max_length = 4
+data_loader = create_dataloader_v1(
+    raw_text, batch_size=8, max_length=max_length, stride=max_length, shuffle=False
+)
+data_iter = iter(data_loader)
+inputs, targets = next(data_iter)
+print(f"Token IDS:\n{inputs}")
+print(f"Inputs shape:\n{inputs.shape}")
+
+token_embeddings = token_embedding_layer(inputs)
+print(token_embeddings.shape)
+
+context_length = max_length
+pos_embedding_layer = torch.nn.Embedding(context_length, output_dim)
+pos_embeddings = pos_embedding_layer(torch.arange(context_length))
+print(pos_embeddings.shape)
+
+input_embeddings = token_embeddings + pos_embeddings
+print(input_embeddings.shape)
