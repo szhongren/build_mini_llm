@@ -133,3 +133,85 @@ context_vectors = attention_weights @ inputs
 print(f"Context vectors: {context_vectors}")
 
 # 3.4 Implementing self-attention with trainable weights
+
+"""
+we are using scaled dot-product attention
+
+the only difference from above is that we introduce weight matrices that are updated during model training. These are crucial so that the model can learn to produce good context vectors.
+
+there are 3 weight matrices: W_q, W_k, and W_v
+W_q: query weight matrix
+W_k: key weight matrix
+W_v: value weight matrix
+"""
+
+x_2 = inputs[1]
+d_in = inputs.shape[1]  # input embedding size
+d_out = 2  # output embedding size
+
+# init weight matrices, use requires_grad=False to avoid updating them during training
+torch.manual_seed(123)
+W_query = torch.nn.Parameter(torch.rand(d_in, d_out), requires_grad=False)
+W_key = torch.nn.Parameter(torch.rand(d_in, d_out), requires_grad=False)
+W_value = torch.nn.Parameter(torch.rand(d_in, d_out), requires_grad=False)
+
+query_2 = x_2 @ W_query
+key_2 = x_2 @ W_key
+value_2 = x_2 @ W_value
+print(f"Query: {query_2}")
+
+# still need to get key and value for all inputs to calculate context vector for 2
+keys = inputs @ W_key
+values = inputs @ W_value
+
+print(f"Keys shape: {keys.shape}")
+print(f"Values shape: {values.shape}")
+
+# then, calculate attention scores, this is different because we projected the input into a lower dimensional space before we calculated the attention scores
+keys_2 = keys[1]
+attention_score_22 = query_2.dot(keys_2)
+print(f"Attention score_22: {attention_score_22}")
+
+attention_scores_2 = query_2 @ keys.T
+print(f"Attention scores_2: {attention_scores_2}")
+
+# now, calculate the attention weights, by taking square root and then using softmax
+# this improves training performance by avoiding small gradients
+d_k = keys.shape[-1]
+attention_weights_2 = torch.softmax(attention_scores_2 / d_k**0.5, dim=-1)
+print(f"Attention weights_2: {attention_weights_2}")
+
+# finally, calculate the context vector
+context_vector_2 = attention_weights_2 @ values
+print(f"Context vector_2: {context_vector_2}")
+
+# query, key, value are borrowed from information retrieval and databases, corresponding to the search term, the document, and the information in the document, respectively.
+
+from self_attention_v1 import SelfAttention_v1
+
+torch.manual_seed(123)
+sa_v1 = SelfAttention_v1(d_in, d_out)
+print(f"Self-attention v1 output: {sa_v1(inputs)}")
+
+from self_attention_v2 import SelfAttention_v2
+
+# torch.manual_seed(789)
+torch.manual_seed(123)
+sa_v2 = SelfAttention_v2(d_in, d_out)
+print(f"Self-attention v2 output: {sa_v2(inputs)}")
+
+print(sa_v1.W_query)
+print(sa_v2.W_query.weight.T)
+print(torch.nn.Parameter(sa_v2.W_query.weight.T))
+print(sa_v1.W_key)
+print(sa_v2.W_key.weight.T)
+print(torch.nn.Parameter(sa_v2.W_key.weight.T))
+print(sa_v1.W_value)
+print(sa_v2.W_value.weight.T)
+print(torch.nn.Parameter(sa_v2.W_value.weight.T))
+
+sa_v1.W_key = torch.nn.Parameter(sa_v2.W_key.weight.T)
+sa_v1.W_query = torch.nn.Parameter(sa_v2.W_query.weight.T)
+sa_v1.W_value = torch.nn.Parameter(sa_v2.W_value.weight.T)
+
+print(f"Self-attention v1 output: {sa_v1(inputs)}")
