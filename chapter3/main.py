@@ -195,23 +195,100 @@ print(f"Self-attention v1 output: {sa_v1(inputs)}")
 
 from self_attention_v2 import SelfAttention_v2
 
-# torch.manual_seed(789)
-torch.manual_seed(123)
+torch.manual_seed(789)
 sa_v2 = SelfAttention_v2(d_in, d_out)
 print(f"Self-attention v2 output: {sa_v2(inputs)}")
 
-print(sa_v1.W_query)
-print(sa_v2.W_query.weight.T)
-print(torch.nn.Parameter(sa_v2.W_query.weight.T))
-print(sa_v1.W_key)
-print(sa_v2.W_key.weight.T)
-print(torch.nn.Parameter(sa_v2.W_key.weight.T))
-print(sa_v1.W_value)
-print(sa_v2.W_value.weight.T)
-print(torch.nn.Parameter(sa_v2.W_value.weight.T))
+# print(sa_v1.W_query)
+# print(sa_v2.W_query.weight.T)
+# print(torch.nn.Parameter(sa_v2.W_query.weight.T))
+# print(sa_v1.W_key)
+# print(sa_v2.W_key.weight.T)
+# print(torch.nn.Parameter(sa_v2.W_key.weight.T))
+# print(sa_v1.W_value)
+# print(sa_v2.W_value.weight.T)
+# print(torch.nn.Parameter(sa_v2.W_value.weight.T))
 
+# copy weights from v2 to v1, the values are different because we initialized v1 with random values, but importantly, the output is the same
 sa_v1.W_key = torch.nn.Parameter(sa_v2.W_key.weight.T)
 sa_v1.W_query = torch.nn.Parameter(sa_v2.W_query.weight.T)
 sa_v1.W_value = torch.nn.Parameter(sa_v2.W_value.weight.T)
 
 print(f"Self-attention v1 output: {sa_v1(inputs)}")
+
+# 3.5 hiding future words with causal attention
+
+"""
+We want to predict the next word without knowing the next word, so we need to hide future words. To do this, we use causal attention or masked attention.
+
+In causal attention, the attention weights are masked so that the model cannot attend to future words.
+"""
+
+# calculate attention weights without masking
+queries = sa_v2.W_query(inputs)
+keys = sa_v2.W_key(inputs)
+attention_scores = queries @ keys.T
+attention_weights = torch.softmax(attention_scores / keys.shape[-1] ** 0.5, dim=-1)
+print(attention_weights)
+
+# create a simple mask to hide future words
+context_length = attention_scores.shape[0]
+# tril creates a lower triangular matrix with ones on the diagonal and below
+mask_simple = torch.tril(torch.ones(context_length, context_length))
+print(mask_simple)
+
+# apply the mask to the attention weights
+masked_simple = attention_weights * mask_simple
+print(masked_simple)
+
+# renormalize the masked attention weights
+row_sums = masked_simple.sum(dim=-1, keepdim=True)
+masked_simple_norm = masked_simple / row_sums
+print(masked_simple_norm)
+
+"""
+A more effecient way to get the masked weights is to mask the attention scores with negative infinity before applying softmax
+"""
+
+mask = torch.triu(torch.ones(context_length, context_length), diagonal=1)
+masked = attention_scores.masked_fill(mask.bool(), -torch.inf)
+print(masked)
+
+# and apply softmax
+attention_weights = torch.softmax(masked / keys.shape[-1] ** 0.5, dim=1)
+print(attention_weights)
+
+"""
+dropout is a technique where ramdomly selected hidden layer units are ignored during training that helps prevent overfitting by ensuring that a model does not become overly reliant on any specific set of hidden layer units
+
+only used during training and disabled afterwards
+"""
+torch.manual_seed(123)
+dropout = torch.nn.Dropout(0.5)
+example = torch.ones(6, 6)
+print(dropout(example))
+
+"""
+to compensate for half the values dropping out, the rest of the values are scaled up by 2 to keep the expected output the same
+"""
+
+torch.manual_seed(123)
+print(dropout(attention_weights))
+
+""""
+simple compact causal attention
+"""
+
+# simmulate bath inputs
+batch = torch.stack((inputs, inputs), dim=0)
+print(batch.shape)
+
+torch.Size([2, 6, 3])
+
+from causal_attention import CausalAttention
+
+torch.manual_seed(123)
+context_length = batch.shape[1]
+ca = CausalAttention(d_in, d_out, context_length, 0.0)
+context_vecs = ca(batch)
+print(f"Context vectors shape: {context_vecs.shape}")
