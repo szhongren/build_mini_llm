@@ -292,3 +292,29 @@ context_length = batch.shape[1]
 ca = CausalAttention(d_in, d_out, context_length, 0.0)
 context_vecs = ca(batch)
 print(f"Context vectors shape: {context_vecs.shape}")
+
+# 3.6 extending single-head attention to multi-head attention
+
+"""
+multi head attention refers to dividing the attention mechanism into multiple heads, each operating independently
+
+we will stack multiple causal attention modules, each with its own set of weight matrices, as a first pass
+
+then, we will implement the same multi head attention module in a more complicated but more efficient way
+
+2 single head modules, 2 sets of each weight matrix, resulting in 2 attention weight matrices and 2 context vectors
+
+finally, we combine the 2 context vectors into a single context vector
+"""
+
+from multi_head_attention import MultiHeadAttentionWrapper
+
+torch.manual_seed(123)
+context_lenghth = batch.shape[1]  # this is the number of tokens
+d_in, d_out = 3, 2
+mha = MultiHeadAttentionWrapper(d_in, d_out, context_lenghth, 0.0, 2)
+
+context_vecs = mha(batch)
+
+print(context_vecs)
+print(f"context vecs shape: {context_vecs.shape}")
