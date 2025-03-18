@@ -1,9 +1,9 @@
 import torch
 from torch import nn
-from layer_norm import LayerNorm
-from dummy_gpt_model import DummyGPTModel
 
 # 4.1 Coding an LLM architecture
+
+from dummy_gpt_model import DummyGPTModel
 
 """
 we have done:
@@ -52,6 +52,8 @@ Layer noramlization improves stability and efficiency of training. The idea is t
 In a GPT-like network, this usually happens before and after the multi-head attention and feed-forward layers. The layer normalization is applied to the input of the multi-head attention and the output of the feed-forward layer. This helps to keep the activations in a good range, making it easier for the model to learn.
 """
 
+from layer_norm import LayerNorm
+
 torch.manual_seed(123)
 batch_example = torch.randn(2, 5)
 layer = nn.Sequential(nn.Linear(5, 6), nn.ReLU())
@@ -79,3 +81,42 @@ mean = out_ln.mean(dim=-1, keepdim=True)
 var = out_ln.var(dim=-1, unbiased=False, keepdim=True)
 print(f"Mean after layer normalization:\n{mean}")
 print(f"Variance after layer normalization:\n{var}")
+
+# 4.3 Implementing the feed forward network with GELU activation
+
+"""
+We will implement a small neural network submodule used as part of the transformer block
+
+historically, ReLU activation function has been used because it's simple and effective, but in LLMs, GELU (Gaussian Error Linear Unit) activation has been found to perform better in practice due to its smoother gradient and improved convergence properties. Another one that has been used is SwiGLU (Swish-gated linear unit)
+
+GELU is defined as GELU(x) = x⋅𝛷(x), where 𝛷(x) is the cumulative distribution function of the standard Gaussian distribution.
+
+approximate GELU(x) = 0.5 * x * (1 + tanh(√(2/π) * (x + 0.044715 * x^3)))
+"""
+
+import matplotlib.pyplot as plt
+from feed_forward import GELU, FeedForward
+
+
+def show_graphs():
+    gelu, relu = GELU(), nn.ReLU()
+
+    x = torch.linspace(-3, 3, 100)
+    y_gelu, y_relu = gelu(x), relu(x)
+    plt.figure(figsize=(8, 3))
+    for i, (y, label) in enumerate(zip([y_gelu, y_relu], ["GELU", "ReLU"]), 1):
+        plt.subplot(1, 2, i)
+        plt.plot(x, y)
+        plt.title(f"{label} activation function")
+        plt.xlabel("x")
+        plt.ylabel(f"{label}(x)")
+        plt.grid(True)
+
+    plt.tight_layout()
+    plt.show()
+
+
+ffn = FeedForward(GPT_CONFIG_124M)
+x = torch.rand(2, 3, 768)
+out = ffn(x)
+print(out.shape)
