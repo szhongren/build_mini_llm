@@ -1,5 +1,5 @@
 # 2.1 get tokens
-from get_tokens_from_verdict import get_tokens_from_verdict
+from .get_tokens_from_verdict import get_tokens_from_verdict
 
 preprocessed = get_tokens_from_verdict()
 print(len(preprocessed))
@@ -18,7 +18,7 @@ for i, item in enumerate(vocab.items()):
         break
 
 # 2.3 create simple text tokenizer
-from simple_tokenizer_v1 import SimpleTokenizerV1
+from .simple_tokenizer_v1 import SimpleTokenizerV1
 
 tokenizer = SimpleTokenizerV1(vocab)
 text = (
@@ -29,7 +29,7 @@ print(ids)
 print(tokenizer.decode(ids))
 
 # 2.4 adding special context tokens
-from simple_tokenizer_v2 import SimpleTokenizerV2
+from .simple_tokenizer_v2 import SimpleTokenizerV2
 
 all_tokens = sorted(list(set(preprocessed)))
 all_tokens.extend(["<|endoftext|>", "<|unk|>"])
@@ -62,10 +62,12 @@ strings = tokenizer.decode(integers)
 print(strings)
 
 # 2.6 data sampling with a sliding window
-from gpt_dataset import create_dataloader_v1
+from .gpt_dataset import create_dataloader_v1
 import torch
+import os
 
-with open("the-verdict.txt", "r", encoding="utf-8") as f:
+current_dir = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(current_dir, "the-verdict.txt"), "r", encoding="utf-8") as f:
     raw_text = f.read()
 
 enc_text = tokenizer.encode(raw_text)

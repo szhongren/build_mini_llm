@@ -3,7 +3,7 @@ from torch import nn
 
 # 4.1 Coding an LLM architecture
 
-from dummy_gpt_model import DummyGPTModel
+from .dummy_gpt_model import DummyGPTModel
 
 """
 we have done:
@@ -52,7 +52,7 @@ Layer noramlization improves stability and efficiency of training. The idea is t
 In a GPT-like network, this usually happens before and after the multi-head attention and feed-forward layers. The layer normalization is applied to the input of the multi-head attention and the output of the feed-forward layer. This helps to keep the activations in a good range, making it easier for the model to learn.
 """
 
-from layer_norm import LayerNorm
+from .layer_norm import LayerNorm
 
 torch.manual_seed(123)
 batch_example = torch.randn(2, 5)
@@ -95,7 +95,7 @@ approximate GELU(x) = 0.5 * x * (1 + tanh(√(2/π) * (x + 0.044715 * x^3)))
 """
 
 import matplotlib.pyplot as plt
-from feed_forward import GELU, FeedForward
+from .feed_forward import GELU, FeedForward
 
 
 def show_graphs():
@@ -120,3 +120,61 @@ ffn = FeedForward(GPT_CONFIG_124M)
 x = torch.rand(2, 3, 768)
 out = ffn(x)
 print(out.shape)
+
+# 4.4 adding shortcut connections
+
+from .deep_neural_network import ExampleDeepNeuralNetwork
+
+"""
+Also known as skip or residual connections, 
+
+In neural networks, shortcut connections allow the gradient to flow through the network more easily during backpropagation. 
+This helps to mitigate the vanishing gradient problem, enabling the training of deeper networks. 
+Shortcut connections can be implemented by adding the input of a layer to its output, allowing the model to learn an identity function if that is optimal. Conceptually, this means that the model can learn to "skip" certain layers if they are not needed for a particular input.
+"""
+
+layer_sizes = [3, 3, 3, 3, 3, 1]
+sample_input = torch.tensor([[1.0, 0.0, -1.0]])
+torch.manual_seed(123)
+model_without_shortcut = ExampleDeepNeuralNetwork(layer_sizes, use_shortcut=False)
+
+
+def print_gradients(model, x):
+    output = model(x)
+    target = torch.tensor([[0.0]])
+    loss = nn.MSELoss()
+    loss = loss(output, target)
+
+    loss.backward()
+    for name, param in model.named_parameters():
+        if "weight" in name:
+            print(f"{name} has gradient mean of {param.grad.abs().mean().item()}")
+
+
+print_gradients(model_without_shortcut, sample_input)
+
+sample_input = torch.tensor([[1.0, 0.0, -1.0]])
+torch.manual_seed(123)
+model_with_shortcut = ExampleDeepNeuralNetwork(layer_sizes, use_shortcut=True)
+
+print_gradients(model_with_shortcut, sample_input)
+
+# 4.5 Connecting attention and linear layers in a transformer block
+
+from .transformer_block import TransformerBlock
+
+"""
+self attention identifies and analyzes relationships between all tokens in a sequence, allowing the model to focus on relevant parts of the input.
+
+feed forward network modifies the data individually for each token, allowing the model to learn complex patterns and relationships.
+
+the transformer block combines these two components, enabling the model to learn both global and local patterns in the data.
+"""
+
+torch.manual_seed(123)
+x = torch.rand(2, 4, 768)
+block = TransformerBlock(GPT_CONFIG_124M)
+output = block(x)
+
+print(f"Input shape: {x.shape}")
+print(f"Output shape: {output.shape}")

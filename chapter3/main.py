@@ -187,13 +187,13 @@ print(f"Context vector_2: {context_vector_2}")
 
 # query, key, value are borrowed from information retrieval and databases, corresponding to the search term, the document, and the information in the document, respectively.
 
-from self_attention_v1 import SelfAttention_v1
+from .self_attention_v1 import SelfAttention_v1
 
 torch.manual_seed(123)
 sa_v1 = SelfAttention_v1(d_in, d_out)
 print(f"Self-attention v1 output: {sa_v1(inputs)}")
 
-from self_attention_v2 import SelfAttention_v2
+from .self_attention_v2 import SelfAttention_v2
 
 torch.manual_seed(789)
 sa_v2 = SelfAttention_v2(d_in, d_out)
@@ -285,7 +285,7 @@ print(batch.shape)
 
 torch.Size([2, 6, 3])
 
-from causal_attention import CausalAttention
+from .causal_attention import CausalAttention
 
 torch.manual_seed(123)
 context_length = batch.shape[1]
@@ -307,7 +307,7 @@ then, we will implement the same multi head attention module in a more complicat
 finally, we combine the 2 context vectors into a single context vector
 """
 
-from multi_head_attention import MultiHeadAttentionWrapper
+from .multi_head_attention import MultiHeadAttentionWrapper
 
 torch.manual_seed(123)
 context_lenghth = batch.shape[1]  # this is the number of tokens
@@ -358,7 +358,7 @@ def example():
 
 example()
 
-from multi_head_attention import MultiHeadAttention
+from .multi_head_attention import MultiHeadAttention
 
 torch.manual_seed(123)
 batch_size, context_length, d_in = batch.shape
