@@ -3,7 +3,7 @@ from torch import nn
 
 # 4.1 Coding an LLM architecture
 
-from .dummy_gpt_model import DummyGPTModel
+from .gpt_model import DummyGPTModel, GPTModel
 
 """
 we have done:
@@ -178,3 +178,120 @@ output = block(x)
 
 print(f"Input shape: {x.shape}")
 print(f"Output shape: {output.shape}")
+
+# 4.6 Coding the GPT model
+torch.manual_seed(123)
+model = GPTModel(GPT_CONFIG_124M)  # GPT 2 small
+out = model(batch)
+
+print(f"Input batch: {batch}")
+print(f"Output shape: {out.shape}")
+print(out)
+
+total_params = sum(p.numel() for p in model.parameters())
+print(f"Total number of parameters: {total_params:,}")
+
+"""
+this is called the 124M parameter model, but the above will show 163,009,536 parameters
+
+This is because of a concept called weight tying, which the original GPT2 used and means that the architecture reuses the weights from the token embedding layer it its output layer.
+"""
+print(f"Token embedding layer shape: {model.tok_emb.weight.shape}")
+print(f"Output layer shape: {model.out_head.weight.shape}")
+
+"""
+the token embedding and output layers are very large due to the number of rows for the 50,257 in the vocab size. 
+"""
+
+total_params_gpt_2 = total_params - sum(p.numel() for p in model.out_head.parameters())
+print(
+    f"Number of trainable parameters considering weight tying: {total_params_gpt_2:,}"
+)
+
+total_size_bytes = total_params * 4
+
+total_size_mb = total_size_bytes / (1024**2)
+print(f"Total size of the model: {total_size_mb: .2f} MB")
+
+gpt_2_medium = GPTModel(
+    {
+        "vocab_size": 50257,  # Vocabulary size
+        "context_length": 1024,  # Context length
+        "emb_dim": 1024,  # Embedding dimension
+        "n_heads": 16,  # Number of attention heads
+        "n_layers": 24,  # Number of layers
+        "drop_rate": 0.1,  # Dropout rate
+        "qkv_bias": False,  # Query-Key-Value bias
+    }
+)
+
+gpt_2_large = GPTModel(
+    {
+        "vocab_size": 50257,  # Vocabulary size
+        "context_length": 1024,  # Context length
+        "emb_dim": 1280,  # Embedding dimension
+        "n_heads": 20,  # Number of attention heads
+        "n_layers": 36,  # Number of layers
+        "drop_rate": 0.1,  # Dropout rate
+        "qkv_bias": False,  # Query-Key-Value bias
+    }
+)
+
+gpt_2_xlarge = GPTModel(
+    {
+        "vocab_size": 50257,  # Vocabulary size
+        "context_length": 1024,  # Context length
+        "emb_dim": 1600,  # Embedding dimension
+        "n_heads": 25,  # Number of attention heads
+        "n_layers": 48,  # Number of layers
+        "drop_rate": 0.1,  # Dropout rate
+        "qkv_bias": False,  # Query-Key-Value bias
+    }
+)
+
+# 4.7 Generating text
+"""
+Now, we have the architecture of the model, we can generate text. This process involves several steps.
+
+First, we decode the output tensors, select tokens based on a probability distribution, and then convert the selected tokens back into text.
+"""
+
+
+def generate_text_simple(model, idx, max_new_tokens, context_size):
+    for _ in range(max_new_tokens):
+        idx_cond = idx[:, -context_size:]  # crop current context to the context size
+        with torch.no_grad():
+            logits = model(idx_cond)  # forward pass to get logits
+
+        logits = logits[:, -1, :]  # get the last time step
+        probas = torch.softmax(logits, dim=-1)  # apply softmax to get probabilities
+        idx_next = torch.argmax(
+            probas, dim=-1, keepdim=True
+        )  # get next token, the index with the highest probability
+        idx = torch.cat((idx, idx_next), dim=1)  # append to the sequence
+
+    return idx  # return input + generated tokens
+
+
+start_context = "Hello, I am"
+encoded = tokenizer.encode(start_context)
+print(f"Encoded input: {encoded}")
+encoded_tensor = torch.tensor(encoded).unsqueeze(0)  # add batch dimension
+print(f"Encoded tensor shape: {encoded_tensor.shape}")
+
+model.eval()  # put the model in evaluation mode, disable random dropout
+out = generate_text_simple(
+    model=gpt_2_xlarge,
+    idx=encoded_tensor,
+    max_new_tokens=10,
+    context_size=GPT_CONFIG_124M["context_length"],
+)
+print(f"Output: {out}")
+print(f"Output length: {len(out[0])}")
+
+decoded_text = tokenizer.decode(out.squeeze(0).tolist())
+print(f"Decoded text: {decoded_text}")
+
+"""
+at this point, the model will generate text but it's not very coherent. To make it coherent, we will have to train the model on a large dataset.
+"""
