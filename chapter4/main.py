@@ -250,28 +250,13 @@ gpt_2_xlarge = GPTModel(
 )
 
 # 4.7 Generating text
+from .util import generate_text_simple
+
 """
 Now, we have the architecture of the model, we can generate text. This process involves several steps.
 
 First, we decode the output tensors, select tokens based on a probability distribution, and then convert the selected tokens back into text.
 """
-
-
-def generate_text_simple(model, idx, max_new_tokens, context_size):
-    for _ in range(max_new_tokens):
-        idx_cond = idx[:, -context_size:]  # crop current context to the context size
-        with torch.no_grad():
-            logits = model(idx_cond)  # forward pass to get logits
-
-        logits = logits[:, -1, :]  # get the last time step
-        probas = torch.softmax(logits, dim=-1)  # apply softmax to get probabilities
-        idx_next = torch.argmax(
-            probas, dim=-1, keepdim=True
-        )  # get next token, the index with the highest probability
-        idx = torch.cat((idx, idx_next), dim=1)  # append to the sequence
-
-    return idx  # return input + generated tokens
-
 
 start_context = "Hello, I am"
 encoded = tokenizer.encode(start_context)
