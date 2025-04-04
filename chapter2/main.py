@@ -67,7 +67,9 @@ import torch
 import os
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-with open(os.path.join(current_dir, "the-verdict.txt"), "r", encoding="utf-8") as f:
+with open(
+    os.path.join(current_dir, "..", "the-verdict.txt"), "r", encoding="utf-8"
+) as f:
     raw_text = f.read()
 
 enc_text = tokenizer.encode(raw_text)
