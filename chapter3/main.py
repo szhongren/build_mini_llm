@@ -61,6 +61,7 @@ def calculate_attention_scores_2(inputs):
     attention_scores_2 = torch.empty(inputs.shape[0])
     for i, x_i in enumerate(inputs):
         attention_scores_2[i] = torch.dot(x_i, query)
+    print(f"\n=== Attention Scores Calculation ===")
     print(f"Attention scores: {attention_scores_2}")
     return attention_scores_2
 
@@ -70,9 +71,8 @@ attention_scores_2 = calculate_attention_scores_2(inputs)
 # normalize, so we get attention weights that sum to 1
 # this is a useful convention for interpretation and maintaining numerical stability
 attention_weights_2_tmp = attention_scores_2 / attention_scores_2.sum()
-print(
-    f"Attention weights: {attention_weights_2_tmp} - Sum: {attention_weights_2_tmp.sum()}"
-)
+print(f"\nNormalized attention weights: {attention_weights_2_tmp}")
+print(f"Sum: {attention_weights_2_tmp.sum():.4f}")
 
 
 # in practice, we use the softmax function to normalize the attention scores because it handles extreme values better
@@ -81,17 +81,15 @@ def softmax_naive(x):
 
 
 attention_weights_2_naive = softmax_naive(attention_scores_2)
-print(
-    f"Attention weights (naive): {attention_weights_2_naive} - Sum: {attention_weights_2_naive.sum()}"
-)
+print(f"\nNaive softmax attention weights: {attention_weights_2_naive}")
+print(f"Sum: {attention_weights_2_naive.sum():.4f}")
 
 
 def calculate_attention_weights_2(attention_scores_2):
     # but really, don't roll your own softmax
     attention_weights_2 = torch.softmax(attention_scores_2, dim=0)
-    print(
-        f"Attention weights: {attention_weights_2} - Sum: {attention_weights_2.sum()}"
-    )
+    print(f"\nPyTorch softmax attention weights: {attention_weights_2}")
+    print(f"Sum: {attention_weights_2.sum():.4f}")
     return attention_weights_2
 
 
@@ -101,7 +99,8 @@ def calculate_context_vector_2(inputs, attention_weights_2):
     context_vec_2 = torch.zeros(query.shape)
     for i, x_i in enumerate(inputs):
         context_vec_2 += attention_weights_2[i] * x_i
-    print(f"Context vector: {context_vec_2}")
+    print(f"\nComputed context vector: {context_vec_2}")
+    print("-" * 50)
 
 
 def calculate_attention_scores_loop(inputs):
@@ -109,13 +108,15 @@ def calculate_attention_scores_loop(inputs):
     for i, x_i in enumerate(inputs):
         for j, x_j in enumerate(inputs):
             attention_scores[i][j] = torch.dot(x_i, x_j)
-    print(f"Attention scores: {attention_scores}")
+    print(f"\n=== Attention Scores (Loop) ===")
+    print(f"Attention scores:\n{attention_scores}")
     return attention_scores
 
 
 def calculate_attention_scores_mat_mul(inputs):
     attention_scores = inputs @ inputs.T
-    print(f"Attention scores: {attention_scores}")
+    print(f"\n=== Attention Scores (Matrix) ===")
+    print(f"Attention scores:\n{attention_scores}")
     return attention_scores
 
 
@@ -127,10 +128,14 @@ attention_scores = calculate_attention_scores_mat_mul(inputs)
 
 # normalize over last dimension, which in this case means it will softmax across each column so that the values in each row sum to 1
 attention_weights = torch.softmax(attention_scores, dim=-1)
-print(f"Attention weights: {attention_weights} - Sum: {attention_weights.sum(dim=-1)}")
+print(f"\nAttention weights:")
+print(f"{attention_weights}")
+print(f"Row sums: {attention_weights.sum(dim=-1)}")
 
 context_vectors = attention_weights @ inputs
-print(f"Context vectors: {context_vectors}")
+print(f"\nContext vectors:")
+print(f"{context_vectors}")
+print("-" * 50)
 
 # 3.4 Implementing self-attention with trainable weights
 

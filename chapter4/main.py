@@ -34,13 +34,17 @@ txt2 = "Every day holds a"
 batch.append(torch.tensor(tokenizer.encode(txt1)))
 batch.append(torch.tensor(tokenizer.encode(txt2)))
 batch = torch.stack(batch, dim=0)
-print(batch)
+print("\n=== Input Batch ===")
+print(f"Batch tensor:\n{batch}")
+print(f"Batch shape: {batch.shape}")
 
 torch.manual_seed(123)
 model = DummyGPTModel(GPT_CONFIG_124M)
 logits = model(batch)
+print(f"\n=== Model Output ===")
 print(f"Output shape: {logits.shape}")
-print(logits)
+print(f"Logits:\n{logits}")
+print("-" * 50)
 
 # 4.2 Normalizing activations with layer normalization
 
@@ -58,12 +62,14 @@ torch.manual_seed(123)
 batch_example = torch.randn(2, 5)
 layer = nn.Sequential(nn.Linear(5, 6), nn.ReLU())
 out = layer(batch_example)
-print(out)
+print("\n=== Layer Normalization Demo ===")
+print(f"Input tensor:\n{out}")
 
 mean = out.mean(dim=-1, keepdim=True)  # mean of the last dimension
 var = out.var(dim=-1, keepdim=True)
-print(f"Mean:\n{mean}")
-print(f"Variance:\n{var}")
+print(f"\nBefore normalization:")
+print(f"  Mean: {mean}")
+print(f"  Variance: {var}")
 
 # apply layer normalization
 
@@ -71,16 +77,19 @@ torch.set_printoptions(sci_mode=False)
 out_norm = (out - mean) / torch.sqrt(var)
 mean = out_norm.mean(dim=-1, keepdim=True)
 var = out_norm.var(dim=-1, keepdim=True)
-print(f"Normalized layer outputs:\n{out_norm}")
-print(f"Mean after normalization:\n{mean}")
-print(f"Variance after normalization:\n{var}")
+print(f"\nAfter normalization:")
+print(f"  Normalized outputs:\n{out_norm}")
+print(f"  Mean: {mean}")
+print(f"  Variance: {var}")
 
 ln = LayerNorm(emb_dim=5)
 out_ln = ln(batch_example)
 mean = out_ln.mean(dim=-1, keepdim=True)
 var = out_ln.var(dim=-1, unbiased=False, keepdim=True)
-print(f"Mean after layer normalization:\n{mean}")
-print(f"Variance after layer normalization:\n{var}")
+print(f"\nWith PyTorch LayerNorm:")
+print(f"  Mean: {mean}")
+print(f"  Variance: {var}")
+print("-" * 50)
 
 # 4.3 Implementing the feed forward network with GELU activation
 
@@ -184,34 +193,37 @@ torch.manual_seed(123)
 model = GPTModel(GPT_CONFIG_124M)  # GPT 2 small
 out = model(batch)
 
+print("\n=== Final GPT Model Test ===")
 print(f"Input batch: {batch}")
 print(f"Output shape: {out.shape}")
-print(out)
+print(f"Model output:\n{out}")
+print("-" * 50)
 
+print("\n=== Model Statistics ===")
 total_params = sum(p.numel() for p in model.parameters())
-print(f"Total number of parameters: {total_params:,}")
+print(f"Total parameters: {total_params:,}")
 
 """
 this is called the 124M parameter model, but the above will show 163,009,536 parameters
 
 This is because of a concept called weight tying, which the original GPT2 used and means that the architecture reuses the weights from the token embedding layer it its output layer.
 """
-print(f"Token embedding layer shape: {model.tok_emb.weight.shape}")
-print(f"Output layer shape: {model.out_head.weight.shape}")
+print(f"\nLayer shapes:")
+print(f"  Token embedding: {model.tok_emb.weight.shape}")
+print(f"  Output layer: {model.out_head.weight.shape}")
 
 """
 the token embedding and output layers are very large due to the number of rows for the 50,257 in the vocab size. 
 """
 
 total_params_gpt_2 = total_params - sum(p.numel() for p in model.out_head.parameters())
-print(
-    f"Number of trainable parameters considering weight tying: {total_params_gpt_2:,}"
-)
+print(f"\nWith weight tying: {total_params_gpt_2:,} parameters")
 
 total_size_bytes = total_params * 4
 
 total_size_mb = total_size_bytes / (1024**2)
-print(f"Total size of the model: {total_size_mb: .2f} MB")
+print(f"Model size: {total_size_mb:.2f} MB")
+print("-" * 50)
 
 gpt_2_medium = GPTModel(
     {

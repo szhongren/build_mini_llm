@@ -1,20 +1,22 @@
 # 2.1 get tokens
 from .get_tokens_from_verdict import get_tokens_from_verdict
 
+print("=== Tokenization Demo ===")
 preprocessed = get_tokens_from_verdict()
-print(len(preprocessed))
-print(preprocessed[:30])
+print(f"Total tokens: {len(preprocessed)}")
+print(f"First 30 tokens: {preprocessed[:30]}")
 
 # 2.2 create vocabulary
 all_words = sorted(set(preprocessed))
 vocab_size = len(all_words)
-print(vocab_size)
+print(f"\n=== Vocabulary Creation ===")
+print(f"Vocabulary size: {vocab_size}")
 vocab = {token: integer for integer, token in enumerate(all_words)}
 
+print("\nFirst 50 vocabulary items:")
 for i, item in enumerate(vocab.items()):
-    print(item)
-
-    if i >= 50:
+    print(f"  {item}")
+    if i >= 49:
         break
 
 # 2.3 create simple text tokenizer
@@ -24,9 +26,12 @@ tokenizer = SimpleTokenizerV1(vocab)
 text = (
     """"It's the last he painted, you know," Mrs. Gisburn said with pardonable pride."""
 )
+print("\n=== Simple Tokenizer Test ===")
+print(f"Text: {text}")
 ids = tokenizer.encode(text)
-print(ids)
-print(tokenizer.decode(ids))
+print(f"Encoded IDs: {ids}")
+print(f"Decoded text: {tokenizer.decode(ids)}")
+print("-" * 50)
 
 # 2.4 adding special context tokens
 from .simple_tokenizer_v2 import SimpleTokenizerV2
