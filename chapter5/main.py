@@ -68,7 +68,9 @@ print(f"Predicted token IDs: {token_ids}\n")
 
 print("Text Comparison:")
 print(f"  Target   (batch 1): '{token_ids_to_text(targets[0], tokenizer)}'")
-print(f"  Predicted (batch 1): '{token_ids_to_text(token_ids[0].flatten(), tokenizer)}'")
+print(
+    f"  Predicted (batch 1): '{token_ids_to_text(token_ids[0].flatten(), tokenizer)}'"
+)
 print("-" * 50)
 
 # targets does not match the output because it's not been trained yet
@@ -135,6 +137,7 @@ file_path = os.path.join(current_dir, "..", "the-verdict.txt")
 with open(file_path, "r", encoding="utf-8") as f:
     text_data = f.read()
 
+train_ratio = 0.90
 total_characters = len(text_data)
 total_tokens = len(tokenizer.encode(text_data))
 print("\n=== Dataset Statistics ===")
@@ -142,8 +145,6 @@ print(f"Total characters: {total_characters:,}")
 print(f"Total tokens: {total_tokens:,}")
 print(f"Train/Val split: {train_ratio:.0%} / {1-train_ratio:.0%}")
 print("-" * 50)
-
-train_ratio = 0.90
 split_idx = int(train_ratio * len(text_data))
 train_data = text_data[:split_idx]
 val_data = text_data[split_idx:]
@@ -187,7 +188,13 @@ from .util import calc_loss_loader
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"\n=== Initial Model Evaluation ===")
 print(f"Device: {device.type}")
+if torch.cuda.is_available():
+    print(f"GPU: {torch.cuda.get_device_name(0)}")
+    print(
+        f"GPU Memory: {torch.cuda.get_device_properties(0).total_memory / 1e9:.1f} GB"
+    )
 model.to(device)
+print(f"Model is on device: {next(model.parameters()).device}")
 with torch.no_grad():
     train_loss = calc_loss_loader(train_loader, model, device)
     val_loss = calc_loss_loader(val_loader, model, device)
@@ -210,18 +217,26 @@ steps of loop:
 8. generate sample text for visual inspection
 """
 
-def train_model_simple(model, train_loader, val_loader, optimizer,
-                       device, num_epochs, eval_freq, eval_iter,
-                       start_context, tokenizer):
+
+def train_model_simple(
+    model,
+    train_loader,
+    val_loader,
+    optimizer,
+    device,
+    num_epochs,
+    eval_freq,
+    eval_iter,
+    start_context,
+    tokenizer,
+):
     train_losses, val_losses, track_tokens_seen = [], [], []
     tokens_seen, global_step = 0, -1
     for epoch in range(num_epochs):
         model.train()
         for input_batch, target_batch in train_loader:
             optimizer.zero_grad()
-            loss = calc_loss_batch(
-                input_batch, target_batch, model, device
-            )
+            loss = calc_loss_batch(input_batch, target_batch, model, device)
             loss.backward()
             optimizer.step()
             tokens_seen += input_batch.numel()
@@ -234,14 +249,15 @@ def train_model_simple(model, train_loader, val_loader, optimizer,
                 train_losses.append(train_loss)
                 val_losses.append(val_loss)
                 track_tokens_seen.append(tokens_seen)
-                print(f"Epoch {epoch + 1:2d} (Step {global_step:06d}): "
-                      f"Train loss {train_loss:.3f}, "
-                      f"Val loss {val_loss:.3f}")
+                print(
+                    f"Epoch {epoch + 1:2d} (Step {global_step:06d}): "
+                    f"Train loss {train_loss:.3f}, "
+                    f"Val loss {val_loss:.3f}"
+                )
 
-        generate_and_print_sample(
-            model, tokenizer, device, start_context
-        )
+        generate_and_print_sample(model, tokenizer, device, start_context)
     return train_losses, val_losses, track_tokens_seen
+
 
 def evaluate_model(model, train_loader, val_loader, device, eval_iter):
     model.eval()
@@ -249,11 +265,10 @@ def evaluate_model(model, train_loader, val_loader, device, eval_iter):
         train_loss = calc_loss_loader(
             train_loader, model, device, num_batches=eval_iter
         )
-        val_loss = calc_loss_loader(
-            val_loader, model, device, num_batches=eval_iter
-        )
+        val_loss = calc_loss_loader(val_loader, model, device, num_batches=eval_iter)
     model.train()
     return train_loss, val_loss
+
 
 def generate_and_print_sample(model, tokenizer, device, start_context):
     model.eval()
@@ -261,38 +276,42 @@ def generate_and_print_sample(model, tokenizer, device, start_context):
     encoded = text_to_token_ids(start_context, tokenizer).to(device)
     with torch.no_grad():
         token_ids = generate_text_simple(
-            model=model, idx=encoded,
-            max_new_tokens=50, context_size=context_size
+            model=model, idx=encoded, max_new_tokens=50, context_size=context_size
         )
     decoded_text = token_ids_to_text(token_ids, tokenizer)
     print(f"Sample generation: '{decoded_text.replace('\n', ' ')}'")
     model.train()
 
+
 torch.manual_seed(123)
 model = GPTModel(GPT_CONFIG_124M)
 model.to(device)
-optimizer = torch.optim.AdamW(
-    model.parameters(),
-    lr=0.0004, weight_decay=0.1
-)
+optimizer = torch.optim.AdamW(model.parameters(), lr=0.0004, weight_decay=0.1)
 num_epochs = 10
 train_losses, val_losses, tokens_seen = train_model_simple(
-    model, train_loader, val_loader, optimizer, device,
-    num_epochs, eval_freq=5, eval_iter=5,
-    start_context="Every effort moves you", tokenizer=tokenizer
+    model,
+    train_loader,
+    val_loader,
+    optimizer,
+    device,
+    num_epochs,
+    eval_freq=5,
+    eval_iter=5,
+    start_context="Every effort moves you",
+    tokenizer=tokenizer,
 )
 
 import matplotlib
-matplotlib.use('TkAgg')  # Use TkAgg backend for WSL2
+
+matplotlib.use("TkAgg")  # Use TkAgg backend for WSL2
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MaxNLocator
+
 
 def plot_losses(epochs_seen, tokens_seen, train_losses, val_losses):
     fig, ax1 = plt.subplots(figsize=(5, 3))
     ax1.plot(epochs_seen, train_losses, label="Training loss")
-    ax1.plot(
-        epochs_seen, val_losses, linestyle="-.", label="Validation loss"
-    )
+    ax1.plot(epochs_seen, val_losses, linestyle="-.", label="Validation loss")
     ax1.set_xlabel("Epochs")
     ax1.set_ylabel("Loss")
     ax1.legend(loc="upper right")
@@ -304,6 +323,7 @@ def plot_losses(epochs_seen, tokens_seen, train_losses, val_losses):
     plt.show()
     # plt.savefig("output.png", dpi=300, bbox_inches="tight")
     # plt.close()
+
 
 epochs_tensor = torch.linspace(0, num_epochs, len(train_losses))
 plot_losses(epochs_tensor, tokens_seen, train_losses, val_losses)
@@ -322,13 +342,17 @@ token_ids = generate_text_simple(
     model=model,
     idx=text_to_token_ids("Every effort moves you", tokenizer),
     max_new_tokens=25,
-    context_size=GPT_CONFIG_124M["context_length"]
+    context_size=GPT_CONFIG_124M["context_length"],
 )
 print("\n=== Final Model Output ===")
 print(f"Generated text: '{token_ids_to_text(token_ids, tokenizer)}'")
 print("=" * 50)
 
 # 5.3.1 temperature scaling
+"""
+temperature scaling is a technique that adds a probabilistic selection process to the next token generation task
+previously, we always sample the token with the highest probability as the next token with argmax, but to get more variety, we can replace argmax with a function that samples from a probability distribution
+"""
 
 vocab = {
     "closer": 0,
@@ -353,37 +377,134 @@ print(f"\n=== Temperature Scaling Demo ===")
 print(f"Most likely next token (argmax): '{inverse_vocab[next_token_id]}'")
 
 torch.manual_seed(123)
+"""
+multinomial is the probabilistic sampling function to replace argmax
+"""
 next_token_id = torch.multinomial(probas, num_samples=1).item()
 print(f"Sampled next token: '{inverse_vocab[next_token_id]}'")
+
 
 def print_sampled_tokens(probas):
     print("\nSampling frequency (1000 samples):")
     torch.manual_seed(123)
-    sample = [torch.multinomial(probas, num_samples=1).item()
-             for i in range(1_000)]
+    sample = [torch.multinomial(probas, num_samples=1).item() for i in range(1_000)]
     sampled_ids = torch.bincount(torch.tensor(sample))
     for i, freq in enumerate(sampled_ids):
         print(f"  {freq:3d} × '{inverse_vocab[i]}'")
 
+
 print_sampled_tokens(probas)
 print("-" * 50)
+
 
 def softmax_with_temperature(logits, temperature):
     scaled_logits = logits / temperature
     return torch.softmax(scaled_logits, dim=0)
 
+
 temperatures = [1, 0.1, 5]
-scaled_probas = [softmax_with_temperature(next_token_logits, T)
-                for T in temperatures]
+scaled_probas = [softmax_with_temperature(next_token_logits, T) for T in temperatures]
+
+# Exercise 5.1: Print sampling frequencies for different temperatures
+for i, T in enumerate(temperatures):
+    print(f"\n=== Temperature = {T} ===")
+    print_sampled_tokens(scaled_probas[i])
+
+    # Count pizza frequency specifically
+    torch.manual_seed(123)
+    sample = [
+        torch.multinomial(scaled_probas[i], num_samples=1).item() for j in range(1_000)
+    ]
+    pizza_count = sum(1 for token_id in sample if token_id == vocab["pizza"])
+    print(f"Pizza sampled {pizza_count} times out of 1000 ({pizza_count/10:.1f}%)")
+
+print("\n=== Faster method to determine pizza sampling frequency ===")
+print("Instead of sampling 1000 times, we can directly use the probability:")
+for i, T in enumerate(temperatures):
+    pizza_prob = scaled_probas[i][vocab["pizza"]].item()
+    expected_count = pizza_prob * 1000
+    print(
+        f"Temperature {T}: Pizza probability = {pizza_prob:.4f} "
+        f"→ Expected count in 1000 samples = {expected_count:.1f}"
+    )
+
 x = torch.arange(len(vocab))
 bar_width = 0.15
 fig, ax = plt.subplots(figsize=(5, 3))
 for i, T in enumerate(temperatures):
-    rects = ax.bar(x + i * bar_width, scaled_probas[i],
-                   bar_width, label=f'Temperature = {T}')
-ax.set_ylabel('Probability')
+    rects = ax.bar(
+        x + i * bar_width, scaled_probas[i], bar_width, label=f"Temperature = {T}"
+    )
+ax.set_ylabel("Probability")
 ax.set_xticks(x)
 ax.set_xticklabels(vocab.keys(), rotation=90)
 ax.legend()
 plt.tight_layout()
 plt.show()
+
+# 5.3.2 top-k sampling
+
+print("\n=== Top-k sampling ===")
+"""
+we have a probabilistic sampling method with temperature scaling to increase output diversity, but this can sometimes lead to grammatically incorrect or nonsensical outputs such as "every effort moves you pizza"
+top-k sampling, when combined with probabilistic sampling and temperature scaling, can improve the text generation results. In top-k sampling, we can restrict the sampled tokens to the top-k most likely tokens and exclude all tokens by using a mask on their probability scores
+basically, it replaces all non-selected logits with -inf, so that when we softmax, the probability of the non-top-k tokens are 0, and the remaining probabilities sum to 1
+"""
+
+top_k = 3
+top_logits, top_pos = torch.topk(next_token_logits, top_k)
+print(f"Top logits: {top_logits}")
+print(f"Top positions: {top_pos}")
+
+new_logits = torch.where(
+    condition=next_token_logits < top_logits[-1],
+    input=torch.tensor(float("-inf")),
+    other=next_token_logits,
+)
+print(new_logits)
+
+topk_probas = torch.softmax(new_logits, dim=0)
+print(topk_probas)
+
+# 5.3.3 modifying the text generation function
+
+print("\n=== Modified text generation function ===")
+
+
+def generate(
+    model, idx, max_new_tokens, context_size, temperature=0.0, top_k=None, eos_id=None
+):
+    for _ in range(max_new_tokens):
+        idx_cond = idx[:, -context_size:]
+        with torch.no_grad():
+            logits = model(idx_cond)
+        logits = logits[:, -1, :]
+        if top_k is not None:
+            top_logits, _ = torch.topk(logits, top_k)
+            min_val = top_logits[:, -1]
+            logits = torch.where(
+                logits < min_val, torch.tensor(float("-inf")).to(logits.device), logits
+            )
+        if temperature > 0.0:
+            logits = logits / temperature
+            probs = torch.softmax(logits, dim=-1)
+            idx_next = torch.multinomial(probs, num_samples=1)
+        else:
+            idx_next = torch.argmax(logits, dim=-1, keepdim=True)
+        if idx_next == eos_id:
+            break
+        idx = torch.cat((idx, idx_next), dim=1)
+    return idx
+
+
+torch.manual_seed(123)
+token_ids = generate(
+    model=model,
+    idx=text_to_token_ids("Every effort moves you", tokenizer),
+    max_new_tokens=15,
+    context_size=GPT_CONFIG_124M["context_length"],
+    top_k=25,
+    temperature=1.4,
+)
+
+print(f"Output text:\n{token_ids_to_text(token_ids, tokenizer)}")
