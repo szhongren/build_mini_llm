@@ -31,7 +31,7 @@ model_name = "gpt2-small (124M)"
 # Create new configuration by copying base config and updating with model-specific settings
 NEW_CONFIG = GPT_CONFIG_124M.copy()
 NEW_CONFIG.update(model_configs[model_name])
-NEW_CONFIG.update({"Context_length": 1024})  # Set maximum sequence length
+NEW_CONFIG.update({"context_length": 1024})  # Set maximum sequence length to match GPT-2
 NEW_CONFIG.update({"qkv_bias": True})  # Enable bias in query/key/value projections
 
 # Initialize GPT model with the new configuration and set to evaluation mode
@@ -63,74 +63,138 @@ def load_weights_into_gpt(gpt, params):
         gpt: Our GPTModel instance to load weights into
         params: Dictionary of pre-trained parameters from OpenAI GPT-2
     """
+    # Load position embedding weights: OpenAI "wpe" -> our pos_emb.weight
+    # Shape: [1024, 768] - 1024 positions, 768 embedding dimensions
     gpt.pos_emb.weight = assign(gpt.pos_emb.weight, params["wpe"])
+    
+    # Load token embedding weights: OpenAI "wte" -> our tok_emb.weight  
+    # Shape: [50257, 768] - 50257 vocab size, 768 embedding dimensions
     gpt.tok_emb.weight = assign(gpt.tok_emb.weight, params["wte"])
 
+    # Process each transformer block (12 blocks for GPT-2 small)
     for b in range(len(params["blocks"])):
+        # === ATTENTION WEIGHTS ===
+        # OpenAI stores Q,K,V weights combined in one tensor "c_attn"["w"]
+        # Shape: [768, 2304] where 2304 = 3 * 768 (for Q, K, V)
+        # Split into 3 equal parts along last dimension (axis=-1)
         q_w, k_w, v_w = np.split(
             (params["blocks"][b]["attn"]["c_attn"])["w"], 3, axis=-1
         )
+        
+        # Assign query weights: transpose (.T) to match our [768, 768] format
+        # OpenAI: [768, 768] -> Our model: [768, 768] 
         gpt.trf_blocks[b].att.W_query.weight = assign(
             gpt.trf_blocks[b].att.W_query.weight, q_w.T
         )
+        
+        # Assign key weights: transpose (.T) to match our format
         gpt.trf_blocks[b].att.W_key.weight = assign(
             gpt.trf_blocks[b].att.W_key.weight, k_w.T
         )
+        
+        # Assign value weights: transpose (.T) to match our format  
         gpt.trf_blocks[b].att.W_value.weight = assign(
             gpt.trf_blocks[b].att.W_value.weight, v_w.T
         )
 
+        # === ATTENTION BIASES ===
+        # OpenAI stores Q,K,V biases combined in one tensor "c_attn"["b"]
+        # Shape: [2304] where 2304 = 3 * 768 (for Q, K, V biases)
+        # Split into 3 equal parts along last dimension
         q_b, k_b, v_b = np.split(
             (params["blocks"][b]["attn"]["c_attn"])["b"], 3, axis=-1
         )
+        
+        # Assign query bias: no transpose needed for bias vectors
         gpt.trf_blocks[b].att.W_query.bias = assign(
             gpt.trf_blocks[b].att.W_query.bias, q_b
         )
+        
+        # Assign key bias
         gpt.trf_blocks[b].att.W_key.bias = assign(gpt.trf_blocks[b].att.W_key.bias, k_b)
+        
+        # Assign value bias
         gpt.trf_blocks[b].att.W_value.bias = assign(
             gpt.trf_blocks[b].att.W_value.bias, v_b
         )
 
+        # === ATTENTION OUTPUT PROJECTION ===
+        # Load attention output projection weights: OpenAI "c_proj"["w"] -> our out_proj.weight
+        # Shape: [768, 768] - projects concatenated attention outputs back to embedding dimension
+        # Transpose (.T) to match our weight matrix orientation
         gpt.trf_blocks[b].att.out_proj.weight = assign(
             gpt.trf_blocks[b].att.out_proj.weight,
             params["blocks"][b]["attn"]["c_proj"]["w"].T,
         )
+        
+        # Load attention output projection bias: no transpose needed for bias
         gpt.trf_blocks[b].att.out_proj.bias = assign(
             gpt.trf_blocks[b].att.out_proj.bias,
             params["blocks"][b]["attn"]["c_proj"]["b"],
         )
 
+        # === FEED-FORWARD NETWORK WEIGHTS ===
+        # Load first MLP layer weights: OpenAI "c_fc"["w"] -> our ff.layers[0].weight
+        # Shape: [768, 3072] - expands from 768 to 3072 (4x expansion ratio)
+        # layers[0] = first linear layer, layers[1] = GELU activation, layers[2] = second linear
         gpt.trf_blocks[b].ff.layers[0].weight = assign(
             gpt.trf_blocks[b].ff.layers[0].weight,
             params["blocks"][b]["mlp"]["c_fc"]["w"].T,
         )
+        
+        # Load first MLP layer bias
         gpt.trf_blocks[b].ff.layers[0].bias = assign(
             gpt.trf_blocks[b].ff.layers[0].bias, params["blocks"][b]["mlp"]["c_fc"]["b"]
         )
+        
+        # Load second MLP layer weights: OpenAI "c_proj"["w"] -> our ff.layers[2].weight  
+        # Shape: [3072, 768] - contracts from 3072 back to 768
         gpt.trf_blocks[b].ff.layers[2].weight = assign(
             gpt.trf_blocks[b].ff.layers[2].weight,
             params["blocks"][b]["mlp"]["c_proj"]["w"].T,
         )
+        
+        # Load second MLP layer bias
         gpt.trf_blocks[b].ff.layers[2].bias = assign(
             gpt.trf_blocks[b].ff.layers[2].bias,
             params["blocks"][b]["mlp"]["c_proj"]["b"],
         )
 
+        # === LAYER NORMALIZATION PARAMETERS ===
+        # Load first layer norm scale: OpenAI "ln_1"["g"] -> our norm1.scale
+        # "ln_1" = layer norm applied before attention
+        # "g" = gamma/scale parameter, "b" = beta/shift parameter
         gpt.trf_blocks[b].norm1.scale = assign(
             gpt.trf_blocks[b].norm1.scale, params["blocks"][b]["ln_1"]["g"]
         )
+        
+        # Load first layer norm shift: OpenAI "ln_1"["b"] -> our norm1.shift
         gpt.trf_blocks[b].norm1.shift = assign(
             gpt.trf_blocks[b].norm1.shift, params["blocks"][b]["ln_1"]["b"]
         )
+        
+        # Load second layer norm scale: OpenAI "ln_2"["g"] -> our norm2.scale
+        # "ln_2" = layer norm applied before feed-forward network
         gpt.trf_blocks[b].norm2.scale = assign(
             gpt.trf_blocks[b].norm2.scale, params["blocks"][b]["ln_2"]["g"]
         )
+        
+        # Load second layer norm shift: OpenAI "ln_2"["b"] -> our norm2.shift
         gpt.trf_blocks[b].norm2.shift = assign(
             gpt.trf_blocks[b].norm2.shift, params["blocks"][b]["ln_2"]["b"]
         )
 
+    # === FINAL MODEL COMPONENTS ===
+    # Load final layer norm scale: OpenAI root "g" -> our final_norm.scale
+    # Applied to all token representations before the output head
     gpt.final_norm.scale = assign(gpt.final_norm.scale, params["g"])
+    
+    # Load final layer norm shift: OpenAI root "b" -> our final_norm.shift  
     gpt.final_norm.shift = assign(gpt.final_norm.shift, params["b"])
+    
+    # Load output head weights: reuse token embedding weights (weight tying)
+    # OpenAI "wte" -> our out_head.weight
+    # This is a common technique where the same weights are used for input embedding and output projection
     gpt.out_head.weight = assign(gpt.out_head.weight, params["wte"])
 
 
