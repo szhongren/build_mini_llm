@@ -1,56 +1,12 @@
-# Import necessary modules for downloading GPT-2 weights and creating model
-from chapter4.gpt_model import GPTModel
-from .gpt_download import download_and_load_gpt2
-from .util import (
-    GPT_CONFIG_124M,
-    generate,
-    token_ids_to_text,
-    text_to_token_ids,
-    tokenizer,
-)
 import torch
-
-# Download and load pre-trained GPT-2 124M model parameters from OpenAI
-settings, params = download_and_load_gpt2(model_size="124M", models_dir="../gpt2")
-print(f"Settings: {settings}")
-print(f"Parameter dictionary keys: {params.keys()}")
-print(params["wte"])
-print(f"Token embedding weight tensor dimensions:{params['wte'].shape}")
-
-# Configuration dictionary for different GPT-2 model sizes
-# Each model has different embedding dimensions, layer counts, and attention heads
-model_configs = {
-    "gpt2-small (124M)": {"emb_dim": 768, "n_layers": 12, "n_heads": 12},
-    "gpt2-medium (355M)": {"emb_dim": 1024, "n_layers": 24, "n_heads": 16},
-    "gpt2-large (774M)": {"emb_dim": 1280, "n_layers": 36, "n_heads": 20},
-    "gpt2-xl (1558M)": {"emb_dim": 1600, "n_layers": 48, "n_heads": 25},
-}
-
-# Select which model configuration to use
-model_name = "gpt2-small (124M)"
-# Create new configuration by copying base config and updating with model-specific settings
-NEW_CONFIG = GPT_CONFIG_124M.copy()
-NEW_CONFIG.update(model_configs[model_name])
-NEW_CONFIG.update(
-    {"context_length": 1024}
-)  # Set maximum sequence length to match GPT-2
-NEW_CONFIG.update({"qkv_bias": True})  # Enable bias in query/key/value projections
-
-# Initialize GPT model with the new configuration and set to evaluation mode
-gpt = GPTModel(NEW_CONFIG)
-gpt.eval()
+import numpy as np
 
 
-# Helper function to assign pre-trained weights to model parameters
 def assign(left, right):
-    # Ensure the shapes match between existing parameter and new weight
+    """Helper function to assign pre-trained weights to model parameters"""
     if left.shape != right.shape:
         raise ValueError(f"Shape mismatch. Left: {left.shape} Right: {right.shape}")
-    # Convert numpy array to PyTorch parameter tensor
     return torch.nn.Parameter(torch.tensor(right))
-
-
-import numpy as np
 
 
 def load_weights_into_gpt(gpt, params):
@@ -198,23 +154,3 @@ def load_weights_into_gpt(gpt, params):
     # OpenAI "wte" -> our out_head.weight
     # This is a common technique where the same weights are used for input embedding and output projection
     gpt.out_head.weight = assign(gpt.out_head.weight, params["wte"])
-
-
-# Set device (GPU if available, otherwise CPU)
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# Load the pre-trained weights into our model and move to device
-load_weights_into_gpt(gpt, params)
-gpt.to(device)
-
-# Example usage: Generate text using the loaded model
-torch.manual_seed(123)
-token_ids = generate(
-    model=gpt,
-    idx=text_to_token_ids("Every effort moves you", tokenizer).to(device),
-    max_new_tokens=25,
-    context_size=NEW_CONFIG["context_length"],
-    top_k=50,
-    temperature=1.5,
-)
-print("Output text:\n", token_ids_to_text(token_ids, tokenizer))

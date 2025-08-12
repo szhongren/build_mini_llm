@@ -53,9 +53,14 @@ import pandas as pd
 """
 load into dataframe
 """
+print("\n=== Loading SMS Spam Dataset ===")
 df = pd.read_csv(data_file_path, sep="\t", header=None, names=["Label", "Text"])
-print(df)
+print(f"Dataset shape: {df.shape}")
+print(f"\nFirst few rows:")
+print(df.head())
+print(f"\nLabel distribution:")
 print(df["Label"].value_counts())
+print("=" * 50)
 
 
 """
@@ -70,8 +75,11 @@ def create_balanced_dataset(df):
     return balanced_df
 
 
+print("\n=== Balancing Dataset ===")
 balanced_df = create_balanced_dataset(df)
+print(f"Balanced label distribution:")
 print(balanced_df["Label"].value_counts())
+print("=" * 50)
 balanced_df["Label"] = balanced_df["Label"].map({"ham": 0, "spam": 1})
 
 
@@ -110,13 +118,21 @@ we can use <|endoftext|> as a padding token
 
 import tiktoken
 
+print("\n=== Setting Up Tokenizer ===")
 tokenizer = tiktoken.get_encoding("gpt2")
-print(tokenizer.encode("<|endoftext|>", allowed_special={"<|endoftext|>"}))
+print(
+    f"Padding token ID: {tokenizer.encode('<|endoftext|>', allowed_special={'<|endoftext|>'})}"
+)
+print("=" * 50)
 
+print("\n=== Creating Training Dataset ===")
 train_dataset = SpamDataset(csv_file="train.csv", max_length=None, tokenizer=tokenizer)
 
-print(train_dataset.max_length)
-print(train_dataset.encoded_texts[:2])
+print(f"Maximum sequence length: {train_dataset.max_length}")
+print(f"\nFirst two encoded examples:")
+for i, text in enumerate(train_dataset.encoded_texts[:2]):
+    print(f"  Example {i+1}: {text[:10]}... (length: {len(text)})")
+print("=" * 50)
 
 val_dataset = SpamDataset(
     csv_file="validation.csv", max_length=train_dataset.max_length, tokenizer=tokenizer
@@ -158,13 +174,16 @@ test_loader = DataLoader(
 """
 check the batch size and the number of batches in each dataset
 """
+print("\n=== Data Loader Information ===")
 for input_batch, target_batch in train_loader:
     pass
-print("Input batch dimensions:", input_batch.shape)
-print("Label batch dimensions", target_batch.shape)
-print(f"{len(train_loader)} training batches")
-print(f"{len(val_loader)} validation batches")
-print(f"{len(test_loader)} test batches")
+print(f"Input batch dimensions: {input_batch.shape}")
+print(f"Label batch dimensions: {target_batch.shape}")
+print(f"\nDataset splits:")
+print(f"  Training batches: {len(train_loader)}")
+print(f"  Validation batches: {len(val_loader)}")
+print(f"  Test batches: {len(test_loader)}")
+print("=" * 50)
 
 # 6.4 Initializing a model with pretrained weights
 
@@ -183,3 +202,45 @@ model_configs = {
     "gpt2-xl (1558M)": {"emb_dim": 1600, "n_layers": 48, "n_heads": 25},
 }
 BASE_CONFIG.update(model_configs[CHOOSE_MODEL])
+
+from chapter4.gpt_model import GPTModel
+from chapter4.util import generate_text_simple
+from chapter5.gpt_download import download_and_load_gpt2
+from chapter5.weight_loader import load_weights_into_gpt
+from chapter5.util import text_to_token_ids, token_ids_to_text
+
+print("\n=== Loading Pretrained GPT-2 Model ===")
+model_size = CHOOSE_MODEL.split(" ")[-1].lstrip("(").rstrip(")")
+print(f"Loading {CHOOSE_MODEL} model...")
+settings, params = download_and_load_gpt2(model_size=model_size, models_dir="../gpt2")
+
+model = GPTModel(BASE_CONFIG)
+load_weights_into_gpt(model, params)
+model.eval()
+print(
+    f"Model loaded successfully with {sum(p.numel() for p in model.parameters()):,} parameters"
+)
+print("=" * 50)
+
+print("\n=== Testing Pretrained Model Generation ===")
+text_1 = "Every effort moves you"
+token_ids = generate_text_simple(
+    model=model,
+    idx=text_to_token_ids(text_1, tokenizer),
+    max_new_tokens=15,
+    context_size=BASE_CONFIG["context_length"],
+)
+print(f"Input: '{text_1}'")
+print(f"Generated: '{token_ids_to_text(token_ids, tokenizer)}'")
+print()
+
+text_2 = "Is the following text 'spam'? Answer with 'yes' or 'no': 'You are a winner you have been specially selected to receive $1000 cash or a @2000 award.'"
+token_ids = generate_text_simple(
+    model=model,
+    idx=text_to_token_ids(text_2, tokenizer),
+    max_new_tokens=23,
+    context_size=BASE_CONFIG["context_length"],
+)
+print(f"Spam detection prompt:")
+print(f"Generated: '{token_ids_to_text(token_ids, tokenizer)}'")
+print("=" * 50)
